@@ -1,0 +1,24 @@
+﻿# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Generated output
+outputs/*
+!outputs/.gitkeep
+
+# Local/sample data
+data/sample_images/*
+!data/sample_images/.gitkeep
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
