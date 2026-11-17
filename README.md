@@ -4,7 +4,7 @@ Convert the visible skyline of a mountain range in a static image into a musical
 
 ## Current stage
 
-Day 1: repository and image loading. Segmentation and music generation are not implemented yet.
+Day 2: HSV threshold segmentation. The loader and first tunable foreground mask are implemented; morphology, skyline extraction, and music generation remain future stages.
 
 ## Setup (Windows PowerShell)
 
@@ -28,6 +28,16 @@ python -m src.image_io path\to\image.jpg
 ```
 
 The command validates JPG/JPEG/PNG input and prints the image shape, dtype, and colour convention. OpenCV decodes images as BGR; the loader returns RGB for display-oriented code.
+
+## Run the Day 2 segmentation check
+
+Use the saved sample image from this repository:
+
+```powershell
+python -m src.segmentation data\sample_images\download.jpg --lower 0 0 0 --upper 179 255 150 --output outputs\download_mask.png
+```
+
+The output is a black-and-white PNG: white (`True`) means the pixel passed the HSV threshold. Adjust the bounds to inspect false positives and false negatives. See [the Day 2 record](docs/day_02_hsv_and_segmentation.md) for the channel ranges and trade-offs.
 
 ## Test
 
