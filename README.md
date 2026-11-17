@@ -1,4 +1,4 @@
-﻿# Mountain to Music
+# Mountain to Music
 
 Convert the visible skyline of a mountain range in a static image into a musical sequence. The project treats the extracted profile as apparent image-space geometry; it does not infer real elevation, depth, distance, or terrain.
 
@@ -34,10 +34,12 @@ The command validates JPG/JPEG/PNG input and prints the image shape, dtype, and 
 Use the saved sample image from this repository:
 
 ```powershell
-python -m src.segmentation data\sample_images\download.jpg --lower 0 0 0 --upper 179 255 150 --output outputs\download_mask.png
+python -m src.segmentation data\sample_images\download.jpg --output outputs\mask.png --hue 0 179 --saturation 0 255 --value 0 180
 ```
 
-The output is a black-and-white PNG: white (`True`) means the pixel passed the HSV threshold. Adjust the bounds to inspect false positives and false negatives. See [the Day 2 record](docs/day_02_hsv_and_segmentation.md) for the channel ranges and trade-offs.
+The CLI prints the aligned mask shape and foreground pixel count. Saved masks use white (`255`) for foreground and black (`0`) for background. See [docs/day_02_hsv_and_segmentation.md](docs/day_02_hsv_and_segmentation.md) for threshold guidance.
+
+For a complete current-project walkthrough, including file responsibilities and the concepts behind the implementation, see [docs/project_overview.md](docs/project_overview.md).
 
 ## Test
 
@@ -68,6 +70,6 @@ mountain_music/
 
 ## Limitations
 
-- No segmentation is implemented yet.
+- HSV segmentation is a tunable colour-threshold heuristic, not semantic segmentation; lighting and scene content affect results.
 - The project currently reports image metadata only; it does not display or transform images in a UI.
 - Do not commit private images, generated files, virtual environments, or secrets.

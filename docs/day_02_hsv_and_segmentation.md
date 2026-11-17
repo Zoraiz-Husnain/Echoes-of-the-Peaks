@@ -1,40 +1,36 @@
 # Day 2 — HSV and first segmentation
 
-## What the failed command was about
+## Goal
 
-The Day 1 command only prints metadata; it does not open a window. The path must be relative to the repository (or absolute), and Windows PowerShell uses backslashes. The saved image is `data\sample_images\download.jpg`, so from `C:\Users\HP\Desktop\mountain_music` run:
+Day 2 adds a small, reusable HSV threshold stage. It accepts the RGB `uint8` arrays returned by `src.image_io.load_image`, converts them to OpenCV HSV at the module boundary, and returns a two-dimensional boolean mask aligned with the input. `True` always means foreground (the pixels inside the configured inclusive HSV range); `False` means background. The CLI writes that convention as white foreground and black background.
+
+## HSV and OpenCV ranges
+
+OpenCV represents 8-bit HSV as hue `0..179`, saturation `0..255`, and value `0..255`. Hue describes colour family, saturation describes colour intensity, and value describes brightness. Compared with RGB thresholds, HSV can separate a colour family from brightness more directly: for example, a sky or haze range can be constrained by saturation/value while hue remains relatively stable.
+
+This is deliberately a heuristic, not semantic segmentation. Similar colours in clouds, trees, buildings, or haze can be selected, and shadows, exposure, season, and camera white balance can shift pixels outside the range. Hue is circular, so a range crossing red's `0/179` boundary is not represented by one interval in this first version; use two masks and combine them in a later change if needed. No morphology, ROI, skyline extraction, UI, or downstream music processing is included.
+
+## API
+
+`HSVThresholds` is a frozen dataclass with explicit inclusive `hue_min`, `hue_max`, `saturation_min`, `saturation_max`, `value_min`, and `value_max` fields. Bounds are validated against OpenCV's ranges. `segment_rgb(image, thresholds)` validates an RGB `(H, W, 3)` `uint8` array, performs `cv2.COLOR_RGB2HSV`, and returns a boolean `(H, W)` mask.
+
+## Exact Windows PowerShell commands
+
+From the repository root:
 
 ```powershell
+cd C:\Users\HP\Desktop\mountain_music
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python -m src.image_io data\sample_images\download.jpg
+python -m src.segmentation data\sample_images\download.jpg --output outputs\mask.png --hue 0 179 --saturation 0 255 --value 0 180
+python -m pytest tests\test_segmentation.py
 ```
 
-It reports the verified image as `(148, 270, 3)`, `uint8`, RGB. If Python is not available in a fresh terminal, activate the documented virtual environment first, or use `\.venv\Scripts\python.exe` directly.
-
-## Implementation
-
-`src/segmentation.py` keeps segmentation separate from image loading. `load_image` returns RGB, and `rgb_to_hsv` explicitly converts RGB to OpenCV HSV at the segmentation boundary.
-
-`HSVThresholds` exposes inclusive lower and upper bounds. OpenCV uses H in `0..179` and S/V in `0..255`. `segment_foreground` returns a two-dimensional boolean mask with shape `(height, width)`; `True` means that the pixel is inside the configured HSV range and is therefore treated as foreground. This is a colour-threshold heuristic, not semantic segmentation or machine learning.
-
-The CLI writes a black-and-white PNG where white is foreground:
-
-```powershell
-python -m src.segmentation data\sample_images\download.jpg --lower 0 0 0 --upper 179 255 150 --output outputs\download_mask.png
-```
-
-## HSV trade-offs
-
-- **Hue** represents the base colour, but its meaning is weak when saturation is low.
-- **Saturation** measures colour intensity. Restricting it can reject grey haze, but may also reject low-saturation mountain faces.
-- **Value** measures brightness. A value ceiling can select darker terrain, but shadows and dark trees may become false positives.
-- Wider bounds usually increase recall and false positives; narrower bounds usually reduce false positives and miss more real mountain pixels.
-
-The first mask should be inspected visually and thresholds adjusted for the particular photograph. No morphology, ROI, skyline extraction, DSP, MIDI, or Streamlit features are included in Day 2.
+The `--output` argument is optional; without it the CLI only inspects and prints the mask shape and foreground count. Adjust the three ranges for the image, keeping hue within `0..179` and saturation/value within `0..255`.
 
 ## Tests
 
-Focused deterministic tests cover RGB-to-HSV conversion, mask shape and dtype, foreground polarity, and invalid bounds. Run all current tests with:
-
-```powershell
-python -m pytest
-```
+`tests/test_segmentation.py` uses deterministic synthetic RGB arrays to verify shape alignment, boolean dtype, foreground polarity, RGB-to-HSV conversion, and invalid-bound rejecti

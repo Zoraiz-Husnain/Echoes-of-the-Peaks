@@ -1,4 +1,4 @@
-"""Day 2 HSV threshold segmentation utilities."""
+"""Configurable HSV threshold segmentation for RGB images."""
 
 from __future__ import annotations
 
@@ -9,67 +9,68 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from src.image_io import load_image
-
 
 @dataclass(frozen=True)
 class HSVThresholds:
-    """Inclusive OpenCV HSV bounds for pixels considered foreground."""
+    """Inclusive OpenCV HSV bounds for foreground pixels."""
 
-    lower: tuple[int, int, int] = (0, 0, 0)
-    upper: tuple[int, int, int] = (179, 255, 255)
+    hue_min: int = 0
+    hue_max: int = 179
+    saturation_min: int = 0
+    saturation_max: int = 255
+    value_min: int = 0
+    value_max: int = 255
 
     def __post_init__(self) -> None:
-        if len(self.lower) != 3 or len(self.upper) != 3:
-            raise ValueError("HSV bounds must contain exactly three values")
-        if any(value < 0 for value in self.lower) or any(value < 0 for value in self.upper):
-            raise ValueError("HSV bounds cannot contain negative values")
-        if any(lower > upper for lower, upper in zip(self.lower, self.upper)):
-            raise ValueError("Each lower HSV bound must be <= its upper bound")
-        if self.upper[0] > 179 or self.upper[1] > 255 or self.upper[2] > 255:
-            raise ValueError("OpenCV HSV bounds are H<=179 and S/V<=255")
+        bounds = (self.hue_min, self.hue_max, self.saturation_min, self.saturation_max, self.value_min, self.value_max)
+        if not all(isinstance(value, (int, np.integer)) for value in bounds):
+            raise TypeError("HSV thresholds must be integers")
+        if not 0 <= self.hue_min <= self.hue_max <= 179:
+            raise ValueError("Hue bounds must satisfy 0 <= hue_min <= hue_max <= 179")
+        if not 0 <= self.saturation_min <= self.saturation_max <= 255:
+            raise ValueError("Saturation bounds must be between 0 and 255")
+        if not 0 <= self.value_min <= self.value_max <= 255:
+            raise ValueError("Value bounds must be between 0 and 255")
+
+    @property
+    def lower(self) -> np.ndarray:
+        return np.array([self.hue_min, self.saturation_min, self.value_min], dtype=np.uint8)
+
+    @property
+    def upper(self) -> np.ndarray:
+        return np.array([self.hue_max, self.saturation_max, self.value_max], dtype=np.uint8)
 
 
-def rgb_to_hsv(image: np.ndarray) -> np.ndarray:
-    """Convert an RGB image shaped (height, width, 3) to OpenCV HSV."""
-    if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3:
-        raise ValueError("Expected an RGB image with shape (height, width, 3)")
-    return cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-
-
-def segment_foreground(image: np.ndarray, thresholds: HSVThresholds) -> np.ndarray:
-    """Return a boolean foreground mask aligned to the input image.
-
-    True means the pixel's HSV values are inside the configured inclusive bounds.
-    No morphology or semantic interpretation is applied.
-    """
-    hsv_image = rgb_to_hsv(image)
-    lower = np.asarray(thresholds.lower, dtype=np.uint8)
-    upper = np.asarray(thresholds.upper, dtype=np.uint8)
-    return cv2.inRange(hsv_image, lower, upper).astype(bool)
-
-
-def save_mask(mask: np.ndarray, path: str | Path) -> None:
-    """Save a boolean mask as a black/white PNG (True foreground = white)."""
-    if mask.ndim != 2 or mask.dtype != np.bool_:
-        raise ValueError("mask must be a two-dimensional boolean array")
-    if not cv2.imwrite(str(path), mask.astype(np.uint8) * 255):
-        raise OSError(f"Could not save mask: {path}")
+def segment_rgb(image: np.ndarray, thresholds: HSVThresholds) -> np.ndarray:
+    """Return a same-height/width boolean mask; True means foreground."""
+    if not isinstance(image, np.ndarray):
+        raise TypeError("image must be a NumPy array")
+    if image.ndim != 3 or image.shape[2] != 3:
+        raise ValueError(f"Expected RGB shape (height, width, 3), got {image.shape}")
+    if image.dtype != np.uint8:
+        raise ValueError("image must have dtype uint8")
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    return cv2.inRange(hsv, thresholds.lower, thresholds.upper).astype(bool)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create an HSV threshold foreground mask.")
+    parser = argparse.ArgumentParser(description="Create and inspect an HSV foreground mask.")
     parser.add_argument("image", type=Path)
-    parser.add_argument("--output", type=Path, default=Path("outputs") / "mask.png")
-    parser.add_argument("--lower", nargs=3, type=int, default=(0, 0, 0), metavar=("H", "S", "V"))
-    parser.add_argument("--upper", nargs=3, type=int, default=(179, 255, 255), metavar=("H", "S", "V"))
+    parser.add_argument("--output", type=Path, help="Optional path for a PNG mask (foreground=255).")
+    parser.add_argument("--hue", nargs=2, type=int, metavar=("MIN", "MAX"), default=(0, 179))
+    parser.add_argument("--saturation", nargs=2, type=int, metavar=("MIN", "MAX"), default=(0, 255))
+    parser.add_argument("--value", nargs=2, type=int, metavar=("MIN", "MAX"), default=(0, 255))
     args = parser.parse_args()
-    mask = segment_foreground(load_image(args.image), HSVThresholds(tuple(args.lower), tuple(args.upper)))
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    save_mask(mask, args.output)
-    print(f"mask_shape: {mask.shape}")
+    from src.image_io import load_image
+
+    thresholds = HSVThresholds(args.hue[0], args.hue[1], args.saturation[0], args.saturation[1], args.value[0], args.value[1])
+    mask = segment_rgb(load_image(args.image), thresholds)
+    print(f"shape: {mask.shape}")
     print(f"foreground_pixels: {int(mask.sum())}")
-    print(f"output: {args.output}")
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        if not cv2.imwrite(str(args.output), mask.astype(np.uint8) * 255):
+            raise OSError(f"Could not save mask: {args.output}")
 
 
 if __name__ == "__main__":
