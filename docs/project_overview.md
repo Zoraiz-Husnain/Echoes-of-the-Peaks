@@ -1,6 +1,6 @@
 # Mountain to Music — Project Overview
 
-This document explains the project as it exists after Day 2. It is intended as a review and interview guide: it covers what the repository contains, why each stage exists, how the data flows, and where the implementation stops.
+This document explains the project as it exists after the initial pre-music pipeline. It is intended as a review and interview guide: it covers what the repository contains, why each stage exists, how the data flows, and where the implementation stops.
 
 ## 1. Project goal
 
@@ -104,6 +104,22 @@ The module's CLI can:
 
 It does not add morphology, regions of interest, skyline extraction, filters, UI, or MIDI logic.
 
+### `src/skyline.py`
+
+This module converts the 2-D boolean mask into a 1-D skyline profile. `extract_skyline` scans each image column and records the smallest row containing foreground. Empty columns remain `NaN`, while an all-empty mask raises a clear error. `skyline_height` converts row coordinates into upward-positive heights using `(image_height - 1) - row`, preserving missing values. `interpolate_missing` fills missing columns linearly, including edge gaps by extending the nearest known value, without mutating its input.
+
+### `src/signal_processing.py`
+
+This module contains small, deterministic operations on one-dimensional spatial profiles. `normalize_min_max` maps a finite non-constant signal to `0..1` and rejects constant or missing-valued signals instead of silently inventing a result. `moving_average` applies a centered odd-width moving average with edge padding and returns a new array. These functions are deliberately separate from skyline extraction so raw and processed profiles can be compared.
+
+### `src/music_mapping.py`
+
+`map_profile_to_midi` maps a finite normalized spatial profile to a validated MIDI range and quantizes it to a named scale. `profile_to_events` creates deterministic equal-duration `NoteEvent` records. These are musical representations only; MIDI file export remains outside this pre-music pipeline.
+
+### `src/visualization.py`
+
+The optional plotting helpers return Matplotlib figures for skyline overlays and profile comparisons. They validate image/profile alignment and keep plotting separate from numerical processing.
+
 ### `src/__init__.py`
 
 This marks `src` as a Python package, allowing imports such as `from src.image_io import load_image` and module execution such as `python -m src.segmentation`.
@@ -117,6 +133,14 @@ This file contains focused tests for Day 1 behavior:
 - rejection of unsupported file extensions.
 
 It uses synthetic NumPy arrays where image content is not relevant.
+
+### `tests/test_skyline.py`
+
+These tests verify topmost-row extraction, missing columns, all-empty masks, upward-positive conversion, and non-mutating interpolation.
+
+### `tests/test_signal_processing.py`
+
+These tests verify min-max normalization, constant-signal rejection, edge-padded moving averages, and window validation.
 
 ### `tests/test_segmentation.py`
 
@@ -359,7 +383,13 @@ The mask does not include:
 
 These omissions are deliberate for the current stage.
 
-## 12. Future pipeline
+## 12. Day 3 and Day 4 concepts
+
+A skyline profile is one value per image column. If a mask contains foreground pixels in a column, the smallest row index is chosen because image row zero is at the top. A column with no foreground is not treated as a real zero-height mountain; it is represented as `NaN` until an explicit interpolation step.
+
+The height conversion reverses image direction: larger height means a higher visible boundary. Interpolation estimates missing columns from neighboring known columns. Normalization removes pixel-unit scale by mapping the lowest profile value to `0` and highest to `1`. A moving average reduces rapid column-to-column changes, but it also softens sharp peaks. The profile is still a spatial signal indexed by x-position, not an audio waveform.
+
+## 13. Future pipeline
 
 The next module will consume the boolean mask:
 
